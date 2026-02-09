@@ -26,3 +26,9 @@ Kilo was written by Salvatore Sanfilippo aka antirez and is released
 under the BSD 2 clause license.
 
 Gilo is also released under the BSD 2 clause license.
+
+Installation:
+
+```
+go install github.com/xyproto/gilo/cmd/editor@latest
+```
