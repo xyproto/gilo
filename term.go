@@ -1,4 +1,4 @@
-package kilo
+package gilo
 
 import (
 	"fmt"

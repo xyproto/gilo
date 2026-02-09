@@ -1,7 +1,7 @@
 // Package kilo is a port of antirez's kilo text editor to Go.
 // It is a minimal terminal text editor that emits VT100 escape sequences
 // directly, without depending on ncurses.
-package kilo
+package gilo
 
 import (
 	"bytes"

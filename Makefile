@@ -1,9 +1,9 @@
-all: kilo
+all: gilo
 
 SRC := $(wildcard *.go) cmd/editor/main.go
 
-kilo: $(SRC) go.mod
-	cd cmd/editor && go build -mod=vendor -o ../../kilo
+gilo: $(SRC) go.mod
+	cd cmd/editor && go build -mod=vendor -o ../../gilo
 
 clean:
-	rm kilo
+	rm gilo

@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/xyproto/kilo"
+	"github.com/xyproto/gilo"
 )
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: kilo <filename>\n")
+		fmt.Fprintf(os.Stderr, "Usage: gilo <filename>\n")
 		os.Exit(1)
 	}
 
-	e, err := kilo.New()
+	e, err := gilo.New()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing editor: %s\n", err)
 		os.Exit(1)
