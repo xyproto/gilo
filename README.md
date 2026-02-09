@@ -1,7 +1,7 @@
-Kilo
-===
+Gilo
+====
 
-Kilo is a small text editor in less than 1K lines of code (counted with cloc).
+Gilo is a port of Kilo (a small text editor in less than 1K lines of code) from C to Go.
 
 A screencast is available here: https://asciinema.org/a/90r2i9bq8po03nazhqtsifksb
 
@@ -24,3 +24,5 @@ style CLI.
 
 Kilo was written by Salvatore Sanfilippo aka antirez and is released
 under the BSD 2 clause license.
+
+Gilo is also released under the BSD 2 clause license.
