@@ -1,7 +1,7 @@
 Gilo
 ====
 
-Gilo is a port of Kilo (a small text editor in less than 1K lines of code) from C to Go.
+Gilo is a port of [Kilo](https://github.com/antirez/kilo) (a small text editor in less than 1K lines of code) from C to Go.
 
 ### Usage
 
