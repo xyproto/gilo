@@ -44,8 +44,9 @@ type Editor struct {
 	statustime  time.Time
 	syntax      *Syntax
 	rawmode     bool
-	origTermios syscall.Termios
+	origTermios any
 	quitTimes   int
+	inputChan   chan KeyEvent
 }
 
 // New creates a new Editor instance, initializes terminal size, and installs
@@ -57,13 +58,7 @@ func New() (*Editor, error) {
 	if err := e.updateWindowSize(); err != nil {
 		return nil, err
 	}
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGWINCH)
-	go func() {
-		for range ch {
-			e.handleSigWinCh()
-		}
-	}()
+	e.setupSignalHandler()
 	return e, nil
 }
 

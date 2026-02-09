@@ -1,8 +1,8 @@
 package gilo
 
-import "syscall"
+import "golang.org/x/sys/unix"
 
 const (
-	ioctlReadTermios  = syscall.TCGETS
-	ioctlWriteTermios = syscall.TCSETS
+	ioctlReadTermios  = unix.TCGETS
+	ioctlWriteTermios = unix.TCSETS
 )
