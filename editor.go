@@ -1,4 +1,4 @@
-// Package kilo is a port of antirez's kilo text editor to Go.
+// Package gilo is a port of antirez's kilo text editor to Go.
 // It is a minimal terminal text editor that emits VT100 escape sequences
 // directly, without depending on ncurses.
 package gilo
@@ -305,7 +305,7 @@ func (e *Editor) refreshScreen() {
 
 		if filerow >= len(e.rows) {
 			if len(e.rows) == 0 && y == e.screenrows/3 {
-				welcome := fmt.Sprintf("Kilo editor -- version %s", Version)
+				welcome := fmt.Sprintf("Gilo editor -- version %s", Version)
 				if len(welcome) > e.screencols {
 					welcome = welcome[:e.screencols]
 				}
