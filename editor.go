@@ -11,72 +11,15 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unicode"
-	"unsafe"
 )
 
 const Version = "0.0.1"
-
-// Syntax highlight types
-const (
-	hlNormal    = 0
-	hlNonprint  = 1
-	hlComment   = 2
-	hlMLComment = 3
-	hlKeyword1  = 4
-	hlKeyword2  = 5
-	hlString    = 6
-	hlNumber    = 7
-	hlMatch     = 8
-)
-
-const (
-	hlHighlightStrings = 1 << 0
-	hlHighlightNumbers = 1 << 1
-)
-
-// Key constants
-const (
-	keyNull      = 0
-	ctrlC        = 3
-	ctrlD        = 4
-	ctrlF        = 6
-	ctrlH        = 8
-	keyTab       = 9
-	ctrlL        = 12
-	keyEnter     = 13
-	ctrlQ        = 17
-	ctrlS        = 19
-	ctrlU        = 21
-	keyEsc       = 27
-	keyBackspace = 127
-
-	arrowLeft  = 1000
-	arrowRight = 1001
-	arrowUp    = 1002
-	arrowDown  = 1003
-	delKey     = 1004
-	homeKey    = 1005
-	endKey     = 1006
-	pageUp     = 1007
-	pageDown   = 1008
-)
 
 const (
 	kiloQuitTimes = 3
 	kiloQueryLen  = 256
 	tabStop       = 8
 )
-
-// Syntax defines a syntax highlighting scheme.
-type Syntax struct {
-	FileMatch              []string
-	Keywords               []string
-	SingleLineCommentStart string
-	MultiLineCommentStart  string
-	MultiLineCommentEnd    string
-	Flags                  int
-}
 
 // erow represents a single line of the file being edited.
 type erow struct {
@@ -105,34 +48,6 @@ type Editor struct {
 	quitTimes   int
 }
 
-// The built-in syntax highlight database.
-var HLDB = []Syntax{
-	{
-		FileMatch: []string{".c", ".h", ".cpp", ".hpp", ".cc"},
-		Keywords: []string{
-			// C keywords
-			"auto", "break", "case", "continue", "default", "do", "else", "enum",
-			"extern", "for", "goto", "if", "register", "return", "sizeof", "static",
-			"struct", "switch", "typedef", "union", "volatile", "while", "NULL",
-			// C++ keywords
-			"alignas", "alignof", "and", "and_eq", "asm", "bitand", "bitor", "class",
-			"compl", "constexpr", "const_cast", "deltype", "delete", "dynamic_cast",
-			"explicit", "export", "false", "friend", "inline", "mutable", "namespace",
-			"new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq",
-			"private", "protected", "public", "reinterpret_cast", "static_assert",
-			"static_cast", "template", "this", "thread_local", "throw", "true", "try",
-			"typeid", "typename", "virtual", "xor", "xor_eq",
-			// C types (trailing | means keyword2)
-			"int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
-			"void|", "short|", "auto|", "const|", "bool|",
-		},
-		SingleLineCommentStart: "//",
-		MultiLineCommentStart:  "/*",
-		MultiLineCommentEnd:    "*/",
-		Flags:                  hlHighlightStrings | hlHighlightNumbers,
-	},
-}
-
 // New creates a new Editor instance, initializes terminal size, and installs
 // the SIGWINCH handler.
 func New() (*Editor, error) {
@@ -150,373 +65,6 @@ func New() (*Editor, error) {
 		}
 	}()
 	return e, nil
-}
-
-// ---------- Low level terminal handling ----------
-
-func (e *Editor) enableRawMode() error {
-	if e.rawmode {
-		return nil
-	}
-	if !isatty(syscall.Stdin) {
-		return fmt.Errorf("not a tty")
-	}
-	orig, err := tcgetattr(syscall.Stdin)
-	if err != nil {
-		return err
-	}
-	e.origTermios = orig
-
-	raw := orig
-	// Input modes
-	raw.Iflag &^= syscall.BRKINT | syscall.ICRNL | syscall.INPCK | syscall.ISTRIP | syscall.IXON
-	// Output modes
-	raw.Oflag &^= syscall.OPOST
-	// Control modes
-	raw.Cflag |= syscall.CS8
-	// Local modes
-	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.IEXTEN | syscall.ISIG
-	// Control chars
-	raw.Cc[syscall.VMIN] = 0
-	raw.Cc[syscall.VTIME] = 1
-
-	if err := tcsetattr(syscall.Stdin, raw); err != nil {
-		return err
-	}
-	e.rawmode = true
-	return nil
-}
-
-// DisableRawMode restores the terminal to its original mode.
-func (e *Editor) DisableRawMode() {
-	if e.rawmode {
-		tcsetattr(syscall.Stdin, e.origTermios)
-		e.rawmode = false
-	}
-}
-
-func (e *Editor) readKey() int {
-	buf := make([]byte, 1)
-	for {
-		n, err := syscall.Read(syscall.Stdin, buf)
-		if n == 1 {
-			break
-		}
-		if err != nil && err != syscall.EAGAIN {
-			return -1
-		}
-	}
-	c := int(buf[0])
-	if c == keyEsc {
-		seq := make([]byte, 3)
-		n, _ := syscall.Read(syscall.Stdin, seq[0:1])
-		if n == 0 {
-			return keyEsc
-		}
-		n, _ = syscall.Read(syscall.Stdin, seq[1:2])
-		if n == 0 {
-			return keyEsc
-		}
-		if seq[0] == '[' {
-			if seq[1] >= '0' && seq[1] <= '9' {
-				n, _ = syscall.Read(syscall.Stdin, seq[2:3])
-				if n == 0 {
-					return keyEsc
-				}
-				if seq[2] == '~' {
-					switch seq[1] {
-					case '3':
-						return delKey
-					case '5':
-						return pageUp
-					case '6':
-						return pageDown
-					}
-				}
-			} else {
-				switch seq[1] {
-				case 'A':
-					return arrowUp
-				case 'B':
-					return arrowDown
-				case 'C':
-					return arrowRight
-				case 'D':
-					return arrowLeft
-				case 'H':
-					return homeKey
-				case 'F':
-					return endKey
-				}
-			}
-		} else if seq[0] == 'O' {
-			switch seq[1] {
-			case 'H':
-				return homeKey
-			case 'F':
-				return endKey
-			}
-		}
-		return keyEsc
-	}
-	return c
-}
-
-func getCursorPosition() (int, int, error) {
-	if _, err := syscall.Write(syscall.Stdout, []byte("\x1b[6n")); err != nil {
-		return 0, 0, err
-	}
-	var buf [32]byte
-	i := 0
-	for i < len(buf)-1 {
-		n, _ := syscall.Read(syscall.Stdin, buf[i:i+1])
-		if n != 1 || buf[i] == 'R' {
-			break
-		}
-		i++
-	}
-	if buf[0] != keyEsc || buf[1] != '[' {
-		return 0, 0, fmt.Errorf("failed to parse cursor position")
-	}
-	var rows, cols int
-	_, err := fmt.Sscanf(string(buf[2:i]), "%d;%d", &rows, &cols)
-	if err != nil {
-		return 0, 0, err
-	}
-	return rows, cols, nil
-}
-
-type winsize struct {
-	Row    uint16
-	Col    uint16
-	Xpixel uint16
-	Ypixel uint16
-}
-
-func getWindowSize() (int, int, error) {
-	ws := winsize{}
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdout),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(&ws)))
-	if errno != 0 || ws.Col == 0 {
-		// Fallback: move cursor to bottom-right and query position
-		if _, err := syscall.Write(syscall.Stdout, []byte("\x1b[999C\x1b[999B")); err != nil {
-			return 0, 0, err
-		}
-		return getCursorPosition()
-	}
-	return int(ws.Row), int(ws.Col), nil
-}
-
-// ---------- Syntax highlighting ----------
-
-func isSeparator(c byte) bool {
-	return c == 0 || c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
-		strings.ContainsRune(",.()+-/*=~%[];", rune(c))
-}
-
-func (e *Editor) rowHasOpenComment(row *erow) bool {
-	if len(row.hl) > 0 && len(row.render) > 0 &&
-		row.hl[len(row.hl)-1] == hlMLComment {
-		rs := row.render
-		if len(rs) < 2 || rs[len(rs)-2] != '*' || rs[len(rs)-1] != '/' {
-			return true
-		}
-	}
-	return false
-}
-
-func (e *Editor) updateSyntax(row *erow) {
-	row.hl = make([]byte, len(row.render))
-	// all initialized to hlNormal (0)
-
-	if e.syntax == nil {
-		return
-	}
-
-	keywords := e.syntax.Keywords
-	scs := e.syntax.SingleLineCommentStart
-	mcs := e.syntax.MultiLineCommentStart
-	mce := e.syntax.MultiLineCommentEnd
-
-	r := row.render
-	i := 0
-	// Skip leading whitespace
-	for i < len(r) && (r[i] == ' ' || r[i] == '\t') {
-		i++
-	}
-
-	prevSep := true
-	inString := byte(0)
-	inComment := false
-
-	if row.idx > 0 && e.rowHasOpenComment(e.rows[row.idx-1]) {
-		inComment = true
-	}
-
-	for i < len(r) {
-		c := r[i]
-
-		// Handle single line comments
-		if prevSep && inString == 0 && !inComment && len(scs) == 2 &&
-			i+1 < len(r) && c == scs[0] && r[i+1] == scs[1] {
-			for j := i; j < len(r); j++ {
-				row.hl[j] = hlComment
-			}
-			return
-		}
-
-		// Handle multi-line comments
-		if inComment {
-			row.hl[i] = hlMLComment
-			if len(mce) == 2 && i+1 < len(r) && c == mce[0] && r[i+1] == mce[1] {
-				row.hl[i+1] = hlMLComment
-				i += 2
-				inComment = false
-				prevSep = true
-				continue
-			}
-			prevSep = false
-			i++
-			continue
-		} else if len(mcs) == 2 && i+1 < len(r) && c == mcs[0] && r[i+1] == mcs[1] {
-			row.hl[i] = hlMLComment
-			row.hl[i+1] = hlMLComment
-			i += 2
-			inComment = true
-			prevSep = false
-			continue
-		}
-
-		// Handle strings
-		if inString != 0 {
-			row.hl[i] = hlString
-			if c == '\\' && i+1 < len(r) {
-				row.hl[i+1] = hlString
-				i += 2
-				prevSep = false
-				continue
-			}
-			if c == inString {
-				inString = 0
-			}
-			i++
-			continue
-		} else if c == '"' || c == '\'' {
-			inString = c
-			row.hl[i] = hlString
-			i++
-			prevSep = false
-			continue
-		}
-
-		// Handle non-printable chars
-		if c < 32 && c != '\t' {
-			row.hl[i] = hlNonprint
-			i++
-			prevSep = false
-			continue
-		}
-		if !unicode.IsPrint(rune(c)) && c >= 127 {
-			row.hl[i] = hlNonprint
-			i++
-			prevSep = false
-			continue
-		}
-
-		// Handle numbers
-		if e.syntax.Flags&hlHighlightNumbers != 0 {
-			if (c >= '0' && c <= '9' && (prevSep || (i > 0 && row.hl[i-1] == hlNumber))) ||
-				(c == '.' && i > 0 && row.hl[i-1] == hlNumber) {
-				row.hl[i] = hlNumber
-				i++
-				prevSep = false
-				continue
-			}
-		}
-
-		// Handle keywords
-		if prevSep {
-			matched := false
-			for _, kw := range keywords {
-				kw2 := false
-				kwClean := kw
-				if strings.HasSuffix(kw, "|") {
-					kw2 = true
-					kwClean = kw[:len(kw)-1]
-				}
-				klen := len(kwClean)
-				if i+klen <= len(r) && r[i:i+klen] == kwClean {
-					// Check separator after keyword
-					if i+klen == len(r) || isSeparator(r[i+klen]) {
-						hlType := byte(hlKeyword1)
-						if kw2 {
-							hlType = hlKeyword2
-						}
-						for j := 0; j < klen; j++ {
-							row.hl[i+j] = hlType
-						}
-						i += klen
-						matched = true
-						break
-					}
-				}
-			}
-			if matched {
-				prevSep = false
-				continue
-			}
-		}
-
-		prevSep = isSeparator(c)
-		i++
-	}
-
-	oc := e.rowHasOpenComment(row)
-	if row.hlOC != oc && row.idx+1 < len(e.rows) {
-		e.updateSyntax(e.rows[row.idx+1])
-	}
-	row.hlOC = oc
-}
-
-func syntaxToColor(hl byte) int {
-	switch hl {
-	case hlComment, hlMLComment:
-		return 36 // cyan
-	case hlKeyword1:
-		return 33 // yellow
-	case hlKeyword2:
-		return 32 // green
-	case hlString:
-		return 35 // magenta
-	case hlNumber:
-		return 31 // red
-	case hlMatch:
-		return 34 // blue
-	default:
-		return 37 // white
-	}
-}
-
-// SelectSyntaxHighlight selects the syntax scheme based on filename.
-func (e *Editor) SelectSyntaxHighlight(filename string) {
-	for i := range HLDB {
-		s := &HLDB[i]
-		for _, pattern := range s.FileMatch {
-			if strings.HasPrefix(pattern, ".") {
-				if strings.HasSuffix(filename, pattern) {
-					e.syntax = s
-					return
-				}
-			} else {
-				if strings.Contains(filename, pattern) {
-					e.syntax = s
-					return
-				}
-			}
-		}
-	}
 }
 
 // ---------- Row operations ----------
@@ -717,7 +265,6 @@ func (e *Editor) Open(filename string) error {
 	}
 
 	lines := strings.Split(string(data), "\n")
-	// Remove trailing empty line that results from split of trailing newline
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
@@ -758,7 +305,7 @@ func (e *Editor) refreshScreen() {
 
 		if filerow >= len(e.rows) {
 			if len(e.rows) == 0 && y == e.screenrows/3 {
-				welcome := fmt.Sprintf("Kilo editor -- verison %s", Version)
+				welcome := fmt.Sprintf("Kilo editor -- version %s", Version)
 				if len(welcome) > e.screencols {
 					welcome = welcome[:e.screencols]
 				}
@@ -1059,8 +606,23 @@ func (e *Editor) processKeypress() bool {
 	switch c {
 	case keyEnter:
 		e.insertNewline()
-	case ctrlC:
+	case ctrlC, ctrlD:
 		// Ignore
+	case ctrlA, homeKey:
+		e.cx = 0
+		e.coloff = 0
+	case ctrlE, endKey:
+		filerow := e.rowoff + e.cy
+		if filerow < len(e.rows) {
+			rowlen := len(e.rows[filerow].chars)
+			if rowlen > e.screencols-1 {
+				e.cx = e.screencols - 1
+				e.coloff = rowlen - e.screencols + 1
+			} else {
+				e.cx = rowlen
+				e.coloff = 0
+			}
+		}
 	case ctrlQ:
 		if e.dirty > 0 && e.quitTimes > 0 {
 			e.SetStatusMessage("WARNING!!! File has unsaved changes. Press Ctrl-Q %d more times to quit.", e.quitTimes)
@@ -1072,7 +634,10 @@ func (e *Editor) processKeypress() bool {
 		e.Save()
 	case ctrlF:
 		e.find()
-	case keyBackspace, ctrlH, delKey:
+	case keyBackspace, ctrlH:
+		e.delChar()
+	case delKey:
+		e.moveCursor(arrowRight)
 		e.delChar()
 	case pageUp, pageDown:
 		if c == pageUp && e.cy != 0 {
@@ -1102,79 +667,38 @@ func (e *Editor) processKeypress() bool {
 	return true
 }
 
-// ---------- Window size ----------
-
-func (e *Editor) updateWindowSize() error {
-	rows, cols, err := getWindowSize()
-	if err != nil {
-		return err
-	}
-	e.screenrows = rows - 2 // room for status bar
-	e.screencols = cols
-	return nil
-}
-
-func (e *Editor) handleSigWinCh() {
-	e.updateWindowSize()
-	if e.cy > e.screenrows {
-		e.cy = e.screenrows - 1
-	}
-	if e.cx > e.screencols {
-		e.cx = e.screencols - 1
-	}
-	e.refreshScreen()
-}
-
-// FileWasModified returns true if the file has unsaved changes.
-func (e *Editor) FileWasModified() bool {
-	return e.dirty > 0
-}
-
-// Run is the main editor loop. It enables raw mode, shows the help message,
-// and processes keys until the user quits.
+// Run is the main editor loop. It enables raw mode, switches to the
+// alternate screen buffer, and processes keys until the user quits.
+// The terminal is restored on exit, SIGTERM, and SIGINT.
 func (e *Editor) Run() error {
 	if err := e.enableRawMode(); err != nil {
 		return err
 	}
-	defer e.DisableRawMode()
+
+	// Switch to alternate screen buffer (#105, #98, #92, #91)
+	syscall.Write(syscall.Stdout, []byte("\x1b[?1049h"))
+
+	cleanup := func() {
+		// Leave alternate screen buffer and restore terminal
+		syscall.Write(syscall.Stdout, []byte("\x1b[?1049l"))
+		e.DisableRawMode()
+	}
+	defer cleanup()
+
+	// Handle SIGTERM/SIGINT to restore terminal (#90)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-sigCh
+		cleanup()
+		os.Exit(0)
+	}()
 
 	e.SetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find")
 	for {
 		e.refreshScreen()
 		if !e.processKeypress() {
-			// Clear screen on exit
-			syscall.Write(syscall.Stdout, []byte("\x1b[2J\x1b[H"))
 			return nil
 		}
 	}
-}
-
-// ---------- termios helpers (POSIX) ----------
-
-func isatty(fd int) bool {
-	_, err := tcgetattr(fd)
-	return err == nil
-}
-
-func tcgetattr(fd int) (syscall.Termios, error) {
-	var t syscall.Termios
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(fd),
-		uintptr(ioctlReadTermios),
-		uintptr(unsafe.Pointer(&t)))
-	if errno != 0 {
-		return t, errno
-	}
-	return t, nil
-}
-
-func tcsetattr(fd int, t syscall.Termios) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(fd),
-		uintptr(ioctlWriteTermios),
-		uintptr(unsafe.Pointer(&t)))
-	if errno != 0 {
-		return errno
-	}
-	return nil
 }
