@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-const Version = "1.0.0"
-
 const (
+	Version = "1.0.1"
+
 	kiloQuitTimes = 3
 	kiloQueryLen  = 256
 	tabStop       = 8

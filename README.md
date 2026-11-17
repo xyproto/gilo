@@ -26,4 +26,4 @@ go install github.com/xyproto/gilo/cmd/editor@latest
 ### General info
 
 * License: BSD-2
-* Version: 1.0.0
+* Version: 1.0.1
