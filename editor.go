@@ -322,10 +322,7 @@ func (e *Editor) refreshScreen() {
 		}
 
 		r := e.rows[filerow]
-		renderLen := len(r.render) - e.coloff
-		if renderLen < 0 {
-			renderLen = 0
-		}
+		renderLen := max(len(r.render)-e.coloff, 0)
 		if renderLen > 0 {
 			if renderLen > e.screencols {
 				renderLen = e.screencols
@@ -419,7 +416,7 @@ func (e *Editor) refreshScreen() {
 }
 
 // SetStatusMessage sets the editor status message.
-func (e *Editor) SetStatusMessage(format string, args ...interface{}) {
+func (e *Editor) SetStatusMessage(format string, args ...any) {
 	e.statusmsg = fmt.Sprintf(format, args...)
 	e.statustime = time.Now()
 }

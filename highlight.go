@@ -243,7 +243,7 @@ func (e *Editor) updateSyntax(row *erow) {
 						if kw2 {
 							hlType = hlKeyword2
 						}
-						for j := 0; j < klen; j++ {
+						for j := range klen {
 							row.hl[i+j] = hlType
 						}
 						i += klen
