@@ -49,8 +49,6 @@ type Editor struct {
 	inputChan   chan KeyEvent
 }
 
-// New creates a new Editor instance, initializes terminal size, and installs
-// the SIGWINCH handler.
 func New() (*Editor, error) {
 	e := &Editor{
 		quitTimes: kiloQuitTimes,
@@ -61,8 +59,6 @@ func New() (*Editor, error) {
 	e.setupSignalHandler()
 	return e, nil
 }
-
-// ---------- Row operations ----------
 
 func (e *Editor) updateRow(row *erow) {
 	var buf bytes.Buffer
@@ -147,8 +143,6 @@ func (e *Editor) rowDelChar(row *erow, at int) {
 	e.updateRow(row)
 	e.dirty++
 }
-
-// ---------- Editor operations ----------
 
 func (e *Editor) insertChar(c int) {
 	filerow := e.rowoff + e.cy
@@ -244,8 +238,6 @@ func (e *Editor) delChar() {
 	e.dirty++
 }
 
-// ---------- File I/O ----------
-
 // Open loads a file into the editor.
 func (e *Editor) Open(filename string) error {
 	e.dirty = 0
@@ -286,8 +278,6 @@ func (e *Editor) Save() error {
 	e.SetStatusMessage("%d bytes written on disk", len(buf))
 	return nil
 }
-
-// ---------- Terminal update ----------
 
 func (e *Editor) refreshScreen() {
 	var ab bytes.Buffer
@@ -421,8 +411,6 @@ func (e *Editor) SetStatusMessage(format string, args ...any) {
 	e.statustime = time.Now()
 }
 
-// ---------- Find mode ----------
-
 func (e *Editor) find() {
 	query := make([]byte, 0, kiloQueryLen)
 	lastMatch := -1
@@ -515,8 +503,6 @@ func (e *Editor) find() {
 	}
 }
 
-// ---------- Cursor movement ----------
-
 func (e *Editor) moveCursor(key int) {
 	filerow := e.rowoff + e.cy
 	filecol := e.coloff + e.cx
@@ -590,8 +576,6 @@ func (e *Editor) moveCursor(key int) {
 		}
 	}
 }
-
-// ---------- Event processing ----------
 
 func (e *Editor) processKeypress() bool {
 	c := e.readKey()
